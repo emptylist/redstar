@@ -37,8 +37,12 @@ class Game {
       , new PlayerTimestepper()
       , this.playerController);
 
-    w.onkeypress = (function (controller) { return (function (e) {
-      controller.processInput(e.which);
+    w.onkeydown = (function (controller) { return (function (e) {
+      controller.processInput(e);
+    })})(this.playerController);
+
+    w.onkeyup = (function (controller) { return (function (e) {
+      controller.processInput(e);
     })})(this.playerController);
       
   }
@@ -134,19 +138,33 @@ interface Command {
   execute(actor: Entity): void;
 }
 
+class MoveState {
+  moveLeft: boolean;
+  moveRight: boolean;
+  moveUp: boolean;
+  moveDown: boolean;
+
+  constructor () {
+    this.moveLeft = false;
+    this.moveRight = false;
+    this.moveUp = false;
+    this.moveDown = false;
+  }
+}
+
 class Entity implements Renderable {
   position: Vector;
-  velocity: Vector;
   sprite: Sprite;
   stepper: Timestepper;
   controller: Controller;
+  moveState: MoveState;
 
   constructor(p: Vector, s: Sprite, stp: Timestepper, c: Controller) {
     this.position = p;
     this.sprite = s;
     this.stepper = stp;
     this.controller = c;
-    this.velocity = new Vector(0, 0);
+    this.moveState = new MoveState();
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -166,7 +184,12 @@ class PlayerTimestepper implements Timestepper {
     this.SPEED = 40;
   }
   step(dt: number, actor: Entity): void {
-    actor.position.translate(actor.velocity.mul(dt * this.SPEED));
+    var velocity = new Vector(0, 0);
+    if (actor.moveState.moveLeft) { velocity.x -= 1.0; }
+    if (actor.moveState.moveRight) { velocity.x += 1.0; }
+    if (actor.moveState.moveUp) { velocity.y -= 1.0; }
+    if (actor.moveState.moveDown) { velocity.y += 1.0; }
+    actor.position.translate(velocity.mul(dt * this.SPEED));
   }
 }
 
@@ -179,9 +202,8 @@ class PlayerController implements Controller {
     this.commandBuffer = new CommandBuffer();
   }
 
-  processInput(key: number) {
-    this.commandBuffer.add(this.schema.processInput(key));
-    console.log(this.commandBuffer);
+  processInput(e: KeyboardEvent) {
+    this.commandBuffer.add(this.schema.processInput(e));
   }
 
   update(player: Entity) {
@@ -207,7 +229,6 @@ class CommandBuffer {
 
   executeCommands(actor: Entity) {
     for (var cmd in this.buffer) {
-      console.log(this.buffer[cmd]);
       this.buffer[cmd].execute(actor);
     }
   }
@@ -219,49 +240,57 @@ class CommandBuffer {
 
 class MoveLeft implements Command {
   cmdname: string;
+  active: boolean;
 
-  constructor() {
-    this.cmdname = "MoveLeft";
+  constructor(active: boolean) {
+    this.cmdname = "moveLeft";
+    this.active = active;
   }
 
   execute(actor: Entity) {
-    actor.velocity.x = -1.0;
+    actor.moveState[this.cmdname] = this.active;
   }
 }
 
 class MoveRight implements Command {
   cmdname: string;
+  active: boolean;
 
-  constructor() {
-    this.cmdname = "MoveRight";
+  constructor(active: boolean) {
+    this.cmdname = "moveRight";
+    this.active = active;
   }
 
   execute(actor: Entity) {
-    actor.velocity.x = 1.0;
+    actor.moveState[this.cmdname] = this.active;
   }
 }
 
 class MoveUp implements Command {
   cmdname: string;
+  active: boolean;
 
-  constructor() {
-    this.cmdname = "MoveUp";
+  constructor(active: boolean) {
+    this.cmdname = "moveUp";
+    this.active = active;
   }
 
   execute(actor: Entity) {
-    actor.velocity.y = -1.0;
+    actor.moveState[this.cmdname] = this.active;
   }
 }
 
 class MoveDown implements Command {
   cmdname: string;
+  active: boolean;
 
-  constructor() {
-    this.cmdname = "MoveDown";
+  constructor(active: boolean) {
+    this.cmdname = "moveDown";
+    this.active = active;
   }
   
   execute(actor: Entity) {
-    actor.velocity.y = 1.0;
+    actor.moveState[this.cmdname] = this.active;
   }
 }
 
@@ -276,22 +305,30 @@ class NullCommand implements Command {
 }
 
 interface ControlSchema {
-  processInput(key: number): Command;
+  processInput(key: KeyboardEvent): Command;
 }
 
 class DefaultControlSchema implements ControlSchema {
   private schema: Object;
   constructor() {
     this.schema = {
-      65: new MoveLeft(),
-      68: new MoveRight(),
-      83: new MoveDown(),
-      87: new MoveUp(),
+      "keydown": {
+        65: new MoveLeft(true)
+      , 68: new MoveRight(true)
+      , 83: new MoveDown(true)
+      , 87: new MoveUp(true)
+      },
+      "keyup": {
+        65: new MoveLeft(false)
+      , 68: new MoveRight(false)
+      , 83: new MoveDown(false)
+      , 87: new MoveUp(false)
+      }
     };
   }
 
-  processInput(key: number): Command {
-    var cmd = this.schema[key];
+  processInput(e: KeyboardEvent): Command {
+    var cmd = this.schema[e.type][e.which];
     if (!cmd) {
       cmd = new NullCommand();
     }
