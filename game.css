@@ -11,3 +11,10 @@ h1 {
   border-radius: 4px;
 }
 
+#fps {
+  position: absolute;
+  top: 80px;
+  left: 40px;
+  font-family: 'monospace';
+}
+
